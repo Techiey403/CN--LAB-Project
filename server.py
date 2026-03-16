@@ -34,10 +34,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/server.log"),
+        logging.FileHandler("logs/server.log", encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 log = logging.getLogger("JobQueueServer")
 
 

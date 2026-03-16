@@ -22,6 +22,9 @@ import ssl
 import uuid
 import logging
 
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [TEST] %(message)s"

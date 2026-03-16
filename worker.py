@@ -19,6 +19,10 @@ import random
 import sys
 import argparse
 
+import sys
+
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # ─────────────────────────── Logging Setup ────────────────────────────────────
 logging.basicConfig(
