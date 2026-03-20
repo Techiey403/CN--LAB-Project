@@ -34,48 +34,81 @@ Multiple clients submit jobs; multiple workers fetch and execute them reliably o
 
 ## Setup
 
-### 1. Prerequisites
-- Python 3.10+
-- OpenSSL (for certificate generation)
+### Prerequisites
+- Python 3.9+
+- `cryptography` package (for cert generation if OpenSSL CLI is not installed)
 
-### 2. Generate SSL Certificates
+```bash
+pip install cryptography
+```
+
+### Generate SSL Certificates (server machine only)
 ```bash
 python gen_certs.py
 ```
-This creates `server.crt` and `server.key` in the project directory.
-
-### 3. Install dependencies
-No external packages required — uses Python standard library only.
+This creates `server.crt` and `server.key`. Copy `server.crt` to the client machine — the private key (`server.key`) stays on the server only.
 
 ---
 
 ## Running
 
-### Start the Server
+### SERVER Machine (your computer)
+
+**Step 1 — Generate SSL certificates (once only)**
+```bash
+python gen_certs.py
+```
+
+**Step 2 — Start the server (keep this terminal open)**
 ```bash
 python server.py
 ```
 
-### Start Workers (in separate terminals)
+**Step 3 — Start one or more workers (open a new terminal for each)**
 ```bash
-python worker.py --host localhost --port 9000
 python worker.py --host localhost --port 9000
 ```
 
-### Submit Jobs (Client)
+**Optional — Find your local IP to share with the client machine**
 ```bash
-# Submit 5 jobs
-python client.py --host localhost --port 9000 --jobs 5 --payload "echo hello"
-
-# Submit jobs and fetch server metrics
-python client.py --jobs 3 --metrics
+# Windows
+ipconfig
+# Look for "IPv4 Address" under your active WiFi or Ethernet adapter
+# e.g. 192.168.1.10
 ```
 
-### Run Performance Test
+**Optional — Open firewall port (run as admin)**
+```bash
+netsh advfirewall firewall add rule name="JobQueue" dir=in action=allow protocol=TCP localport=9000
+```
+
+---
+
+### CLIENT Machine (other computer)
+
+**Files needed — copy these from the server machine:**
+```
+client.py
+performance_test.py
+server.crt        ← must match the server's certificate
+```
+
+**Step 1 — Submit jobs**
+```bash
+# Replace 192.168.1.10 with the server machine's actual IP
+python client.py --host 192.168.1.10 --port 9000 --jobs 3 --payload "echo hello"
+
+# Submit jobs and fetch live server metrics
+python client.py --host 192.168.1.10 --port 9000 --jobs 3 --metrics
+```
+
+**Step 2 — Run performance test**
 ```bash
 # 5 concurrent clients, 4 jobs each
-python performance_test.py --clients 5 --jobs 4
+python performance_test.py --host 192.168.1.10 --port 9000 --clients 5 --jobs 4
 ```
+
+> Both machines must be on the same network (same WiFi or LAN).
 
 ---
 
