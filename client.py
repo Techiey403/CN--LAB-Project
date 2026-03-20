@@ -65,12 +65,14 @@ def submit_job(conn, payload: str) -> str:
 
 def poll_status(conn, job_id: str, timeout=60) -> dict:
     deadline = time.time() + timeout
+    interval = 0.5  # start polling every 0.5s
     while time.time() < deadline:
         send_msg(conn, {"action": "status", "job_id": job_id})
         resp = recv_msg(conn)
         if resp and resp["state"] in ("DONE", "FAILED"):
             return resp
-        time.sleep(1)
+        time.sleep(interval)
+        interval = min(interval * 1.5, 3.0)  # back off up to 3s max
     return {"state": "TIMEOUT", "result": None}
 
 
