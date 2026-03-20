@@ -5,6 +5,7 @@ Performance Evaluation Script
 - Prints a summary report
 """
 
+import os
 import socket
 import ssl
 import json
@@ -16,7 +17,8 @@ import logging
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s [PERF] %(message)s")
 
-CERTFILE = "server.crt"
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CERTFILE = os.path.join(_BASE_DIR, "server.crt")
 
 
 def send_msg(conn, data):

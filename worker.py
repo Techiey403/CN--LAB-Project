@@ -7,6 +7,8 @@ Job Queue Worker
 - Usage: python worker.py --host localhost --port 9000
 """
 
+import os
+import sys
 import socket
 import ssl
 import json
@@ -14,10 +16,12 @@ import subprocess
 import time
 import argparse
 import logging
+from typing import Tuple
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [WORKER] %(message)s")
 
-CERTFILE = "server.crt"
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CERTFILE = os.path.join(_BASE_DIR, "server.crt")
 
 
 def send_msg(conn, data: dict):
@@ -44,15 +48,20 @@ def _recv_exact(conn, n):
     return buf
 
 
-def execute_job(payload: str) -> tuple[bool, str]:
+def execute_job(payload: str) -> Tuple[bool, str]:
     """
     Execute the job payload as a shell command.
+    Uses 'cmd /c' on Windows and 'sh -c' on Unix.
     Returns (success, output).
     """
     try:
+        if sys.platform == "win32":
+            cmd = ["cmd", "/c", payload]
+        else:
+            cmd = ["sh", "-c", payload]
+
         result = subprocess.run(
-            payload,
-            shell=True,
+            cmd,
             capture_output=True,
             text=True,
             timeout=20
@@ -65,7 +74,7 @@ def execute_job(payload: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def connect(host, port) -> tuple[ssl.SSLSocket, str]:
+def connect(host: str, port: int) -> Tuple[ssl.SSLSocket, str]:
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.load_verify_locations(CERTFILE)
     ctx.check_hostname = False  # self-signed cert

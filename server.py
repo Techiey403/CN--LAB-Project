@@ -7,6 +7,7 @@ Distributed Job Queue Server
 - All communication over TCP + SSL/TLS
 """
 
+import os
 import socket
 import ssl
 import threading
@@ -24,8 +25,10 @@ logging.basicConfig(
 
 HOST = "0.0.0.0"
 PORT = 9000
-CERTFILE = "server.crt"
-KEYFILE = "server.key"
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CERTFILE = os.path.join(_BASE_DIR, "server.crt")
+KEYFILE  = os.path.join(_BASE_DIR, "server.key")
 
 # Job states
 class JobState(str, Enum):

@@ -5,6 +5,7 @@ Job Queue Client
 - Usage: python client.py --host localhost --port 9000 --jobs 5
 """
 
+import os
 import socket
 import ssl
 import json
@@ -14,7 +15,8 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [CLIENT] %(message)s")
 
-CERTFILE = "server.crt"
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CERTFILE = os.path.join(_BASE_DIR, "server.crt")
 
 
 def send_msg(conn, data: dict):
