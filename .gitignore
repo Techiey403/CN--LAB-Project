@@ -1,0 +1,6 @@
+# SSL certificates and keys
+server.crt
+server.key
+*.pem
+*.key
+*.crt
