@@ -1,171 +1,146 @@
 # Distributed Job Queue Service
 
-**Socket Programming Mini Project – Problem 12**  
-Implements a TCP + SSL/TLS secured, multi-client, multi-worker distributed job queue.
+A secure, socket-based distributed job queue system built with Python.  
+Multiple clients submit jobs; multiple workers fetch and execute them reliably over **TCP + SSL/TLS**.
 
 ---
 
 ## Architecture
 
 ```
-  ┌─────────┐         ┌─────────┐         ┌─────────┐
-  │ Client1 │─── TLS──│         │──── TLS──│ Worker1 │
-  ├─────────┤         │         │          ├─────────┤
-  │ Client2 │─── TLS──│  Server │──── TLS──│ Worker2 │
-  ├─────────┤         │         │          ├─────────┤
-  │ ClientN │─── TLS──│         │──── TLS──│ WorkerN │
-  └─────────┘         └────┬────┘          └─────────┘
-                           │
-                    ┌──────┴──────┐
-                    │  Job Queue  │  (thread-safe in-memory)
-                    │  Jobs DB    │  (dict, all job states)
-                    │  Metrics    │  (throughput, latency)
-                    └─────────────┘
+ [Client 1] ──┐
+ [Client 2] ──┤   TCP+TLS    ┌─────────────────────┐   TCP+TLS   ┌──────────┐
+ [Client N] ──┼─────────────▶│   Job Queue Server  │────────────▶│ Worker 1 │
+              │              │  - Job Queue (FIFO)  │             └──────────┘
+              │              │  - Job State Store   │   TCP+TLS   ┌──────────┐
+              └──────────────│  - Metrics           │────────────▶│ Worker 2 │
+                             └─────────────────────┘             └──────────┘
 ```
 
-### Components
-| File | Role |
-|---|---|
-| `server.py` | Central server – accepts clients & workers, manages job queue |
-| `worker.py` | Worker node – fetches jobs, executes, reports results |
-| `client.py` | Client – submits jobs, queries status, views metrics |
-| `performance_eval.py` | Load test – measures throughput, latency, scalability |
-| `tests/test_suite.py` | Automated tests – correctness, concurrency, edge cases |
+**Communication Flow:**
+1. Client connects → sends `{"role": "client"}` → submits jobs
+2. Worker connects → sends `{"role": "worker"}` → receives jobs → executes → reports result
+3. Server re-queues jobs if a worker disconnects mid-execution
+4. All messages are length-prefixed JSON over TLS
 
-### Protocol (Custom, over TCP + TLS)
-All messages are framed as `[4-byte big-endian length][JSON payload]`.
-
-**Client actions:** `SUBMIT`, `STATUS`, `LIST_JOBS`, `METRICS`  
-**Worker actions:** `FETCH`, `COMPLETE`, `FAIL`, `HEARTBEAT`
+**Protocol Design:**
+- 4-byte big-endian length prefix + JSON body
+- Roles: `client` | `worker`
+- Client actions: `submit`, `status`, `metrics`
+- Server→Worker actions: `execute`, `ping`
+- Worker→Server actions: `result`, `pong`
 
 ---
 
 ## Setup
 
-### Requirements
-- Python 3.8+
-- OpenSSL (for cert generation)
+### 1. Prerequisites
+- Python 3.10+
+- OpenSSL (for certificate generation)
 
-### 1. Generate SSL Certificates
+### 2. Generate SSL Certificates
 ```bash
-mkdir -p certs
-openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt \
-  -days 365 -nodes -subj "/CN=localhost"
+python gen_certs.py
 ```
+This creates `server.crt` and `server.key` in the project directory.
 
-### 2. Install Dependencies
-No external packages required – uses Python standard library only.
+### 3. Install dependencies
+No external packages required — uses Python standard library only.
 
 ---
 
-## Running the System
+## Running
 
-### Terminal 1 – Start Server
+### Start the Server
 ```bash
 python server.py
 ```
-Listens on port 9000 with TLS enabled.
 
-### Terminal 2+ – Start Workers (run multiple for concurrency)
+### Start Workers (in separate terminals)
 ```bash
-python worker.py          # auto-assigned ID
-python worker.py worker1  # custom ID
-python worker.py worker2
+python worker.py --host localhost --port 9000
+python worker.py --host localhost --port 9000
 ```
 
-### Terminal 3 – Start Client (interactive)
+### Submit Jobs (Client)
 ```bash
-python client.py
+# Submit 5 jobs
+python client.py --host localhost --port 9000 --jobs 5 --payload "echo hello"
+
+# Submit jobs and fetch server metrics
+python client.py --jobs 3 --metrics
 ```
 
-**Available commands:**
-```
->>> submit COMPUTE:5000       # CPU-bound: sum of squares up to 5000
->>> submit FIBONACCI:35       # Compute Fibonacci number
->>> submit HASH:hello_world   # SHA-256 hash
->>> submit PRIME:100          # Find primes up to 100
->>> submit SLEEP:2            # Simulate I/O delay of 2 seconds
->>> status <job_id>           # Check a specific job
->>> wait <job_id>             # Block until job finishes
->>> list                      # Show all jobs
->>> metrics                   # Show server performance metrics
->>> quit
-```
-
-### Batch Mode
+### Run Performance Test
 ```bash
-python client.py batch "COMPUTE:1000" "HASH:test" "FIBONACCI:30"
+# 5 concurrent clients, 4 jobs each
+python performance_test.py --clients 5 --jobs 4
 ```
 
 ---
 
-## Running Tests
-```bash
-# Server + at least 1 worker must be running first
-python tests/test_suite.py
+## File Structure
+
 ```
-
-## Performance Evaluation
-```bash
-# Server + at least 2 workers must be running
-python performance_eval.py
+.
+├── server.py            # Central job queue server
+├── client.py            # Job submission client
+├── worker.py            # Job execution worker
+├── performance_test.py  # Concurrent load & latency benchmarking
+├── gen_certs.py         # SSL certificate generator
+├── server.crt           # Generated TLS certificate (after gen_certs.py)
+├── server.key           # Generated TLS private key (after gen_certs.py)
+└── README.md
 ```
-Produces a report in `logs/perf_report.json`.
-
----
-
-## Job Types
-
-| Type | Format | Description |
-|---|---|---|
-| COMPUTE | `COMPUTE:<n>` | Sum of squares 0..n |
-| FIBONACCI | `FIBONACCI:<n>` | Nth Fibonacci number |
-| HASH | `HASH:<text>` | SHA-256 of text |
-| PRIME | `PRIME:<n>` | Primes up to n |
-| SLEEP | `SLEEP:<secs>` | Simulates I/O wait |
 
 ---
 
 ## Key Features
 
-### Exactly-Once Execution
-Each job has a UUID. Once ASSIGNED to a worker, it's removed from the queue. The Jobs DB tracks all state transitions.
-
-### Worker Failure & Re-queuing
-- Workers send `HEARTBEAT` every 5 seconds
-- Server watchdog thread checks every 5 seconds; if a worker's `last_seen` > 15s, it is declared dead
-- Any `ASSIGNED` job held by the dead worker is re-queued as `PENDING`
-- Abrupt disconnections are also caught and trigger re-queuing
-
-### SSL/TLS Security
-- TLS 1.2+ enforced via `ssl.SSLContext`
-- Self-signed certificate (swap for CA-signed cert in production)
-- Plain TCP connections are rejected at the SSL handshake level
-
-### Concurrency
-- Each client/worker connection runs in its own daemon thread
-- `threading.Lock` protects all shared state (jobs_db, workers, clients)
-- `queue.Queue` provides thread-safe job dispatch
+| Feature | Details |
+|---|---|
+| Transport | TCP sockets (raw `socket` module) |
+| Security | SSL/TLS via Python `ssl` module, TLS 1.2+ |
+| Concurrency | `threading.Thread` per connection |
+| Job Queue | `queue.Queue` (thread-safe FIFO) |
+| Exactly-once | Job state machine: PENDING → ASSIGNED → DONE/FAILED |
+| Fault tolerance | Worker disconnect triggers job re-queue |
+| Metrics | Live counters: submitted, completed, failed, requeued |
 
 ---
 
-## Logs
-| File | Contents |
-|---|---|
-| `logs/server.log` | Server activity, job assignments, errors |
-| `logs/worker.log` | Worker activity, job execution |
-| `logs/client.log` | Client submissions |
-| `logs/perf_report.json` | Performance evaluation results |
+## Performance Metrics (sample output)
+
+```
+=======================================================
+  Performance Test: 5 clients x 4 jobs each
+=======================================================
+
+Results:
+  Total jobs completed : 20
+  Total errors         : 0
+  Total elapsed time   : 8.42s
+  Throughput           : 2.38 jobs/sec
+  Avg latency          : 2.104s
+  Min latency          : 0.812s
+  Max latency          : 4.231s
+  Median latency       : 1.987s
+
+Server Metrics:
+  jobs_submitted           : 20
+  jobs_completed           : 20
+  jobs_failed              : 0
+  jobs_requeued            : 0
+=======================================================
+```
 
 ---
 
-## Evaluation Criteria Coverage
+## Edge Cases Handled
 
-| Criterion | How it's met |
-|---|---|
-| Problem Definition & Architecture | Multi-component design; custom framed protocol |
-| Core Implementation | Raw `socket`, `ssl`, `bind/listen/accept`, manual framing |
-| Feature Implementation (D1) | Multi-client, multi-worker; SSL done; job lifecycle |
-| Performance Evaluation | `performance_eval.py` – throughput, latency, P95 |
-| Optimization & Fixes | Watchdog re-queuing; edge case handling; error responses |
-| Final Demo (D2) | Full GitHub repo with README, all source files |
+- Abrupt client disconnection (try/except on recv)
+- Worker failure mid-job → job re-queued automatically
+- SSL handshake failures → logged and connection closed
+- Invalid role/action → error response sent
+- Worker timeout (30s) → job re-queued
+- Partial reads → `_recv_exact` ensures full message delivery
